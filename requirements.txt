@@ -1,0 +1,5 @@
+streamlit>=1.41
+python-docx>=1.1
+openpyxl>=3.1
+google-api-python-client>=2.0
+google-auth>=2.0
