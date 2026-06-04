@@ -680,7 +680,7 @@ def main():
         _, col, _ = st.columns([1, 2, 1])
         with col:
             st.title("Document Annotation Interface")
-            if st.button("Sign in with Google", type="primary"):
+            if st.button("Sign in with Google"):
                 st.login("google")
         st.stop()
 
