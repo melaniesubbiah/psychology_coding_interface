@@ -675,23 +675,6 @@ def render_annotation() -> None:
 def main():
     st.set_page_config(page_title="Annotation Tool", layout="wide")
 
-    # ── Gmail login gate ──────────────────────────────────────────────────────
-    print(st.user, st.user.is_logged_in)
-    if not st.user.is_logged_in:
-        _, col, _ = st.columns([1, 2, 1])
-        with col:
-            st.title("Document Annotation Interface")
-            if st.button("Sign in with Google", type="primary"):
-                st.login()
-        st.stop()
-
-    allowed = list(st.secrets.get("auth", {}).get("allowed_emails", []))
-    if allowed and st.user.email not in allowed:
-        st.error(f"Access denied: {st.user.email} is not on the allowed list.")
-        st.button("Sign out", on_click=st.logout)
-        st.stop()
-    # ─────────────────────────────────────────────────────────────────────────
-
     if "page" not in st.session_state:
         st.session_state.page = "name"
     page = st.session_state.page
