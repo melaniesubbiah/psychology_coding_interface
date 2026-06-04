@@ -680,8 +680,8 @@ def main():
         _, col, _ = st.columns([1, 2, 1])
         with col:
             st.title("Document Annotation Interface")
-            if st.button("Sign in with Google"):
-                st.login("google")
+            if st.button("Sign in with Google", type="primary"):
+                st.login()
         st.stop()
 
     allowed = list(st.secrets.get("auth", {}).get("allowed_emails", []))
