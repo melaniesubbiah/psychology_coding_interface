@@ -114,12 +114,11 @@ def annotator_for_code(code_id: str) -> str | None:
 # ── Google Drive helpers ───────────────────────────────────────────────────────
 
 def get_drive_folders() -> dict[str, str]:
-    """Return and cache the three Drive folder IDs."""
+    """Return and cache the docs + annotations Drive folder IDs."""
     if "drive_folders" not in st.session_state:
         docs_id = st.secrets["gdrive"]["docs_folder_id"]
         ann_id = gdrive.ensure_subfolder("annotations", docs_id)
-        json_id = gdrive.ensure_subfolder("json", ann_id)
-        st.session_state.drive_folders = {"docs": docs_id, "annotations": ann_id, "json": json_id}
+        st.session_state.drive_folders = {"docs": docs_id, "annotations": ann_id}
     return st.session_state.drive_folders
 
 
@@ -135,47 +134,40 @@ def _docx_index() -> dict[str, str]:
     return st.session_state.docx_index
 
 
-def _json_index() -> dict[str, str]:
-    """Map json filename → Drive file_id, cached for the session."""
-    if "json_index" not in st.session_state:
+def _ann_file_index() -> dict[str, str]:
+    """Map filename (e.g. 'ananya.json') → Drive file_id in the annotations folder."""
+    if "ann_file_index" not in st.session_state:
         folders = get_drive_folders()
-        files = gdrive.list_files(folders["json"])
-        st.session_state.json_index = {f["name"]: f["id"] for f in files}
-    return st.session_state.json_index
+        files = gdrive.list_files(folders["annotations"])
+        st.session_state.ann_file_index = {f["name"]: f["id"] for f in files}
+    return st.session_state.ann_file_index
 
 
-def _invalidate_json_index() -> None:
-    st.session_state.pop("json_index", None)
-
-
-def _get_ann_data(annotator: str, filename: str) -> dict:
-    """Download and cache the full annotation JSON for one user/file."""
-    cache_key = f"ann_data_{annotator}_{filename}"
+def _get_user_data(annotator: str) -> dict:
+    """Download and cache the single JSON for this user (all their files)."""
+    cache_key = f"user_data_{annotator}"
     if cache_key not in st.session_state:
-        jname = f"{annotator}__{Path(filename).stem}.json"
-        idx = _json_index()
+        idx = _ann_file_index()
+        jname = f"{annotator}.json"
         if jname not in idx:
-            st.session_state[cache_key] = {}
+            st.session_state[cache_key] = {"annotator": annotator, "files": {}}
         else:
-            st.session_state[cache_key] = json.loads(gdrive.download_bytes(idx[jname]))
+            try:
+                st.session_state[cache_key] = json.loads(gdrive.download_bytes(idx[jname]))
+            except Exception:
+                st.session_state[cache_key] = {"annotator": annotator, "files": {}}
     return st.session_state[cache_key]
 
 
+def _get_ann_data(annotator: str, filename: str) -> dict:
+    """Return the per-file section from the user's JSON."""
+    return _get_user_data(annotator).get("files", {}).get(filename, {})
+
+
 def preload_annotations(users: list[str]) -> None:
-    """Batch-download annotation JSONs for the given users (for the file page)."""
-    idx = _json_index()
+    """Download each user's single JSON (one request per user)."""
     for user in users:
-        for filename in FILES:
-            cache_key = f"ann_data_{user}_{filename}"
-            if cache_key not in st.session_state:
-                jname = f"{user}__{filename}.json"
-                if jname in idx:
-                    try:
-                        st.session_state[cache_key] = json.loads(gdrive.download_bytes(idx[jname]))
-                    except Exception:
-                        st.session_state[cache_key] = {}
-                else:
-                    st.session_state[cache_key] = {}
+        _get_user_data(user)
 
 
 def get_docx_bytes(filename: str) -> bytes:
@@ -277,10 +269,9 @@ def load_annotations(annotator: str, filename: str) -> dict:
 
 
 def save_annotations(
-    annotator: str, filename: str, annotations: dict,
-    highlights: list[dict], current_idx: int | None = None,
+    annotator: str, filename: str, annotations: dict, highlights: list[dict],
 ) -> None:
-    folders = get_drive_folders()
+    """Update in-memory state only. Call flush_to_drive() on navigation to persist."""
     highlights_meta = {
         str(i): {
             "title": h.get("title", ""),
@@ -289,30 +280,40 @@ def save_annotations(
         }
         for i, h in enumerate(highlights)
     }
-    data = {
-        "annotator": annotator,
-        "filename": filename,
-        "last_updated": datetime.now().isoformat(),
+    user_data = _get_user_data(annotator)
+    user_data.setdefault("files", {})[filename] = {
         "total_highlights": len(highlights),
         "highlights_meta": highlights_meta,
         "annotations": annotations,
     }
+    user_data["last_updated"] = datetime.now().isoformat()
+    st.session_state[f"user_data_{annotator}"] = user_data
 
-    jname = f"{annotator}__{Path(filename).stem}.json"
-    json_bytes = json.dumps(data, indent=2).encode("utf-8")
-    gdrive.upload_or_update(jname, folders["json"], json_bytes, "application/json")
 
-    # Update session cache and refresh json index if this is a new file
-    cache_key = f"ann_data_{annotator}_{filename}"
-    st.session_state[cache_key] = data
-    if jname not in _json_index():
-        _invalidate_json_index()
+def flush_to_drive(
+    annotator: str, filename: str, annotations: dict,
+    highlights: list[dict], current_idx: int | None = None,
+) -> None:
+    """Write the current user JSON to Drive, then update combined.xlsx if needed."""
+    save_annotations(annotator, filename, annotations, highlights)
 
-    if current_idx is not None:
-        if is_annotated(annotations.get(str(current_idx), {}), schema_for_user(annotator)):
-            generate_combined_excel()
+    user_data = _get_user_data(annotator)
+    jname = f"{annotator}.json"
+    json_bytes = json.dumps(user_data, indent=2).encode("utf-8")
+
+    # Use cached file ID to skip the list query
+    file_id = _ann_file_index().get(jname)
+    if file_id:
+        gdrive.update_by_id(file_id, json_bytes, "application/json")
     else:
-        generate_combined_excel()
+        folders = get_drive_folders()
+        gdrive.upload_or_update(jname, folders["annotations"], json_bytes, "application/json")
+
+    if current_idx is None or is_annotated(annotations.get(str(current_idx), {}), schema_for_user(annotator)):
+        try:
+            generate_combined_excel()
+        except Exception as e:
+            st.warning(f"combined.xlsx could not be updated: {e}")
 
 
 def is_complete(annotator: str, filename: str) -> bool:
@@ -380,19 +381,19 @@ def generate_combined_excel() -> None:
 
     for filename in FILES:
         total = 0
-        user_data: dict[str, dict] = {}
+        file_data: dict[str, dict] = {}
         for user in USERS:
-            d = _get_ann_data(user, filename)
+            d = _get_user_data(user).get("files", {}).get(filename, {})
             total = max(total, d.get("total_highlights", 0))
-            user_data[user] = d
+            file_data[user] = d
         if total == 0:
             continue
 
         highlights_meta = next(
-            (d.get("highlights_meta", {}) for d in user_data.values() if d.get("highlights_meta")),
+            (d.get("highlights_meta", {}) for d in file_data.values() if d.get("highlights_meta")),
             {},
         )
-        user_anns = {user: user_data[user].get("annotations", {}) for user in USERS}
+        user_anns = {user: file_data[user].get("annotations", {}) for user in USERS}
 
         for i in range(total):
             meta = highlights_meta.get(str(i), {})
@@ -434,12 +435,13 @@ def generate_combined_excel() -> None:
 
     buf = io.BytesIO()
     wb.save(buf)
-    folders = get_drive_folders()
-    gdrive.upload_or_update(
-        "combined.xlsx", folders["annotations"],
-        buf.getvalue(),
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    xlsx_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    file_id = _ann_file_index().get("combined.xlsx")
+    if file_id:
+        gdrive.update_by_id(file_id, buf.getvalue(), xlsx_mime)
+    else:
+        folders = get_drive_folders()
+        gdrive.upload_or_update("combined.xlsx", folders["annotations"], buf.getvalue(), xlsx_mime)
 
 
 # ── Pages ──────────────────────────────────────────────────────────────────────
@@ -452,7 +454,7 @@ def render_name_page() -> None:
         name = st.text_input("Your name")
         name_valid = name.strip() in USERS
         if name.strip() and not name_valid:
-            st.warning("Name not recognised. Please enter one of the assigned annotator names.")
+            st.error(f'"{name.strip()}" is not a recognised annotator. Please enter one of the assigned names.')
         if st.button("Continue", disabled=not name_valid, type="primary"):
             st.session_state.annotator = name.strip()
             st.session_state.page = "files"
@@ -552,7 +554,7 @@ def render_annotation() -> None:
         st.session_state.page = "files"
         for key in ("highlights", "annotations", "current_idx"):
             st.session_state.pop(key, None)
-        _invalidate_json_index()
+        st.session_state.pop("ann_file_index", None)
 
     with st.sidebar:
         st.markdown(f"**Interview: {doc_name}**")
@@ -569,10 +571,12 @@ def render_annotation() -> None:
             current_marker = "▶ " if i == idx else ""
             if st.button(f"{current_marker}{icon} {i + 1}. {label_text}",
                          key=f"nav_{i}", use_container_width=True):
+                flush_to_drive(annotator, doc_name, annotations, highlights, current_idx=idx)
                 st.session_state.current_idx = i
                 st.rerun()
         st.divider()
         if st.button("← Change document"):
+            flush_to_drive(annotator, doc_name, annotations, highlights, current_idx=idx)
             _go_to_files()
             st.rerun()
 
@@ -646,26 +650,46 @@ def render_annotation() -> None:
         "codes": new_codes, "notes": notes,
         "text": highlight["text"], "title": highlight["title"], "quote": quote,
     }
-    save_annotations(annotator, doc_name, annotations, highlights, current_idx=idx)
+    # Update in-memory state on every rerun (no Drive I/O)
+    save_annotations(annotator, doc_name, annotations, highlights)
 
     col_prev, _, col_next = st.columns([1, 4, 1])
     with col_prev:
         if st.button("← Prev", disabled=idx == 0):
+            flush_to_drive(annotator, doc_name, annotations, highlights, current_idx=idx)
             st.session_state.current_idx = idx - 1
             st.rerun()
     with col_next:
         if idx < n - 1:
             if st.button("Next →"):
+                flush_to_drive(annotator, doc_name, annotations, highlights, current_idx=idx)
                 st.session_state.current_idx = idx + 1
                 st.rerun()
         else:
             if st.button("Done ✓", type="primary"):
+                flush_to_drive(annotator, doc_name, annotations, highlights, current_idx=idx)
                 _go_to_files()
                 st.rerun()
 
 
 def main():
     st.set_page_config(page_title="Annotation Tool", layout="wide")
+
+    # ── Gmail login gate ──────────────────────────────────────────────────────
+    if not st.user.is_logged_in:
+        _, col, _ = st.columns([1, 2, 1])
+        with col:
+            st.title("Document Annotation Interface")
+            st.button("Sign in with Google", on_click=st.login, args=("google",), type="primary")
+        st.stop()
+
+    allowed = list(st.secrets.get("auth", {}).get("allowed_emails", []))
+    if allowed and st.user.email not in allowed:
+        st.error(f"Access denied: {st.user.email} is not on the allowed list.")
+        st.button("Sign out", on_click=st.logout)
+        st.stop()
+    # ─────────────────────────────────────────────────────────────────────────
+
     if "page" not in st.session_state:
         st.session_state.page = "name"
     page = st.session_state.page
