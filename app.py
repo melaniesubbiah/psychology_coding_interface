@@ -676,6 +676,7 @@ def main():
     st.set_page_config(page_title="Annotation Tool", layout="wide")
 
     # ── Gmail login gate ──────────────────────────────────────────────────────
+    print(st.user, st.user.is_logged_in)
     if not st.user.is_logged_in:
         _, col, _ = st.columns([1, 2, 1])
         with col:
