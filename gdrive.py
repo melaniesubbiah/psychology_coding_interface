@@ -49,6 +49,7 @@ def download_bytes(file_id: str) -> bytes:
 
 
 def update_by_id(file_id: str, data: bytes, mime_type: str) -> None:
+    print("DEBUG!!!", file_id)
     """Update an existing file by known ID — no list query needed."""
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime_type, resumable=False)
     _service().files().update(fileId=file_id, media_body=media, **_SD).execute()
