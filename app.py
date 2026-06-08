@@ -14,6 +14,8 @@ import gdrive
 USERS = ["ananya", "bodi", "meiling"]
 ADMIN_USER = "ananya"
 
+
+
 # Filenames (without .docx extension) all users will annotate.
 FILES: list[str] = [
     "001", "002", "003", "005", "006", "007",
@@ -36,12 +38,12 @@ FILES: list[str] = [
 #     The first option is the placeholder and counts as unanswered for completion.
 #
 CODING_SCHEMA: dict = {
-    "Life Philosophy Expressions": [
+    "Expressions": [
         {"id": "expr_personal_belief", "label": "Personal belief", "type": "checkbox"},
         {"id": "expr_personal_mindset", "label": "Personal mindset", "type": "checkbox"},
         {"id": "expr_personal_value", "label": "Personal value", "type": "checkbox"},
     ],
-    "Life Philosophy Domains": [
+    "Domains": [
         {"id": "domain_self", "label": "Self", "type": "checkbox"},
         {"id": "domain_community", "label": "Community", "type": "checkbox"},
         {"id": "domain_society", "label": "Society", "type": "checkbox"},
@@ -51,13 +53,13 @@ CODING_SCHEMA: dict = {
         {"id": "emotional_tenor", "label": "Emotional tenor", "type": "select",
          "options": ["— select —", "-2: overtaken by negative", "-1", "0", "1", "2: exudes positive"]},
     ],
-    "Core Psychological Themes": [
+    "Themes": [
         {"id": "self_determination", "label": "Self-determination", "type": "select",
          "options": ["— select —", "0: lack of control", "1", "2", "3", "4: choice without barrier"]},
         {"id": "connectedness", "label": "Connectedness", "type": "select",
          "options": ["— select —", "0: isolation", "1", "2", "3", "4: strong clear connection"]},
     ],
-    "Additional Psychological Themes": [
+    "Additional Themes": [
         {"id": "theme_self_actualization", "label": "Self-actualization", "type": "checkbox"},
         {"id": "theme_world_awareness", "label": "World-awareness", "type": "checkbox"},
         {"id": "theme_trust", "label": "Trust", "type": "checkbox"},
@@ -201,7 +203,7 @@ def build_highlight_html(runs: list[dict]) -> str:
         for r in runs
     )
     return (
-        f'<mark style="background:#fcfb90;padding:2px 5px;border-radius:3px">'
+        f'<mark style="font-size: 19px;background:#fcfb90;padding:2px 5px;border-radius:3px">'
         f"{inner}</mark>"
     )
 
@@ -449,7 +451,7 @@ def generate_combined_excel() -> None:
 def render_name_page() -> None:
     _, col, _ = st.columns([1, 2, 1])
     with col:
-        st.title("Document Annotation Interface")
+        st.title("Life Philosophy Coding Interface")
         st.subheader("Get started")
         name = st.text_input("Your name")
         name_valid = name.strip() in USERS
@@ -465,7 +467,7 @@ def render_file_page() -> None:
     annotator = st.session_state.annotator
     _, col, _ = st.columns([1, 2, 1])
     with col:
-        st.title("Document Annotation Interface")
+        st.title("Life Philosophy Coding Interface")
         st.subheader(f"Welcome, {annotator}")
 
         with st.spinner("Loading progress…"):
@@ -559,15 +561,16 @@ def render_annotation() -> None:
     with st.sidebar:
         st.markdown(f"**Interview: {doc_name}**")
         st.caption(f"Annotator: {annotator}")
-        st.progress(labeled_words / total_words if total_words else 0)
-        st.caption(f"{labeled_words:,} / {total_words:,} highlighted words")
+        completed = sum(1 for v in annotations.values() if is_annotated(v, user_schema))
+        st.progress(completed / n)
+        st.caption(f"{completed} of {n} sections coded")
         st.divider()
         for i, h in enumerate(highlights):
             saved = annotations.get(str(i), {})
             has_label = is_annotated(saved, user_schema)
             icon = "✅" if has_label else "○"
             nav_title = h["title"] if h["title"] else h["text"]
-            label_text = f"{nav_title[:35]}…" if len(nav_title) > 35 else nav_title
+            label_text = nav_title.title()[8:]
             current_marker = "▶ " if i == idx else ""
             if st.button(f"{current_marker}{icon} {i + 1}. {label_text}",
                          key=f"nav_{i}", use_container_width=True):
@@ -582,11 +585,7 @@ def render_annotation() -> None:
 
     highlight = highlights[idx]
     saved = annotations.get(str(idx), {})
-    completed = sum(1 for v in annotations.values() if is_annotated(v, user_schema))
 
-    st.progress(completed / n)
-    st.caption(f"{completed} of {n} sections coded")
-    st.divider()
 
     if highlight["title"]:
         st.markdown(f"#### {idx + 1}. {html_lib.escape(highlight['title'])}", unsafe_allow_html=True)
@@ -607,25 +606,26 @@ def render_annotation() -> None:
         for item in items:
             start = context.find(item["text"], pos)
             if start >= 0:
-                parts.append(html_lib.escape(context[pos:start]))
+                parts.append(html_lib.escape(context[pos:start]).replace("\n\n", "</span>\n\n<span style='font-size: 19px;'>"))
                 parts.append(build_highlight_html(item["runs"]))
                 pos = start + len(item["text"])
             else:
                 parts.append(build_highlight_html(item["runs"]))
-        parts.append(html_lib.escape(context[pos:]))
-        st.markdown("".join(parts), unsafe_allow_html=True)
-        if p_idx < len(para_groups) - 1:
-            st.markdown("<br>", unsafe_allow_html=True)
-
-    st.divider()
+        parts.append(html_lib.escape(context[pos:]).replace("\n\n", "</span>\n\n<span style='font-size: 19px;'>"))
+        with st.container(height=500):
+            st.markdown(f'<span style="font-size: 19px;">{"".join(parts)}</span>', unsafe_allow_html=True)
+            if p_idx < len(para_groups) - 1:
+                st.markdown("<br>", unsafe_allow_html=True)
 
     saved_codes = saved.get("codes", {})
     new_codes: dict = {}
-    for category, items in user_schema.items():
-        st.markdown(f"**{category}**")
-        cols = st.columns(len(items))
-        for col, schema_item in zip(cols, items):
-            with col:
+    cols = st.columns(5)
+    for col_id, (category, items) in enumerate(user_schema.items()):
+        #cols = st.columns(SCHEMA_COLUMNS[category])
+        with cols[col_id]:
+            st.markdown(f"**{category}**:", unsafe_allow_html=True)
+            for schema_item in items:
+                #with cols[col_id+1]:
                 sid = schema_item["id"]
                 if schema_item["type"] == "checkbox":
                     new_codes[sid] = st.checkbox(
@@ -642,7 +642,7 @@ def render_annotation() -> None:
                         key=f"code_{idx}_{sid}",
                     )
 
-    notes = st.text_area("Notes", value=saved.get("notes", ""), height=100, key=f"notes_{idx}")
+    notes = st.text_area("Notes (Optional)", value=saved.get("notes", ""), height=100, key=f"notes_{idx}")
 
     first_words = highlight["items"][0]["text"].split()
     quote = " ".join(first_words[:10]) + ("…" if len(first_words) > 10 else "")
@@ -673,7 +673,32 @@ def render_annotation() -> None:
 
 
 def main():
-    st.set_page_config(page_title="Annotation Tool", layout="wide")
+    st.set_page_config(page_title="Life Philosophy Coding Interface", layout="wide")
+    # st.html(
+    #     """
+    #     <style>
+    #     [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p {
+    #         font-size: 18px !important;
+    #     }
+    #     div[data-testid="stSelectbox"] label p {
+    #         font-size: 18px !important;
+    #     }
+    #     </style>
+    #     """
+    # )
+    st.html(
+        """
+        <style>
+        [data-testid="stVerticalBlock"] {
+            gap: 0.2rem; /* Adjust this value to compress or expand space */
+        }
+        div[data-testid="stButton"] button {
+            justify-content: flex-start !important;
+            text-align: left !important;
+        }
+        </style>
+        """
+    )
 
     if "page" not in st.session_state:
         st.session_state.page = "name"
