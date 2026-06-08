@@ -135,16 +135,6 @@ def _docx_index() -> dict[str, str]:
         st.session_state.docx_index = {Path(f["name"]).stem: f["id"] for f in files}
     return st.session_state.docx_index
 
-
-def _ann_file_index() -> dict[str, str]:
-    """Map filename (e.g. 'ananya.json') → Drive file_id in the annotations folder."""
-    if "ann_file_index" not in st.session_state:
-        folders = get_drive_folders()
-        files = gdrive.list_files(folders["annotations"])
-        st.session_state.ann_file_index = {f["name"]: f["id"] for f in files}
-    return st.session_state.ann_file_index
-
-
 def _get_user_data(annotator: str) -> dict:
     """Download and cache the single JSON for this user (all their files)."""
     cache_key = f"user_data_{annotator}"
@@ -304,12 +294,8 @@ def flush_to_drive(
     json_bytes = json.dumps(user_data, indent=2).encode("utf-8")
 
     # Use cached file ID to skip the list query
-    file_id = _ann_file_index().get(jname)
-    if file_id:
-        gdrive.update_by_id(file_id, json_bytes, "application/json")
-    else:
-        folders = get_drive_folders()
-        gdrive.upload_or_update(jname, folders["annotations"], json_bytes, "application/json")
+    folders = get_drive_folders()
+    gdrive.upload_or_update(jname, folders["annotations"], json_bytes, "application/json")
 
     if current_idx is None or is_annotated(annotations.get(str(current_idx), {}), schema_for_user(annotator)):
         try:
@@ -438,12 +424,8 @@ def generate_combined_excel() -> None:
     buf = io.BytesIO()
     wb.save(buf)
     xlsx_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    file_id = _ann_file_index().get("combined.xlsx")
-    if file_id:
-        gdrive.update_by_id(file_id, buf.getvalue(), xlsx_mime)
-    else:
-        folders = get_drive_folders()
-        gdrive.upload_or_update("combined.xlsx", folders["annotations"], buf.getvalue(), xlsx_mime)
+    folders = get_drive_folders()
+    gdrive.upload_or_update("combined.xlsx", folders["annotations"], buf.getvalue(), xlsx_mime)
 
 
 # ── Pages ──────────────────────────────────────────────────────────────────────
