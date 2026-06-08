@@ -203,7 +203,7 @@ def build_highlight_html(runs: list[dict]) -> str:
         for r in runs
     )
     return (
-        f'<mark style="font-size: 19px;background:#fcfb90;padding:2px 5px;border-radius:3px">'
+        f'<mark style="font-size: 18px;background:#fcfb90;padding:2px 5px;border-radius:3px">'
         f"{inner}</mark>"
     )
 
@@ -606,14 +606,14 @@ def render_annotation() -> None:
         for item in items:
             start = context.find(item["text"], pos)
             if start >= 0:
-                parts.append(html_lib.escape(context[pos:start]).replace("\n\n", "</span>\n\n<span style='font-size: 19px;'>"))
+                parts.append(html_lib.escape(context[pos:start]).replace("\n\n", "</span>\n\n<span style='font-size: 18px;'>"))
                 parts.append(build_highlight_html(item["runs"]))
                 pos = start + len(item["text"])
             else:
                 parts.append(build_highlight_html(item["runs"]))
-        parts.append(html_lib.escape(context[pos:]).replace("\n\n", "</span>\n\n<span style='font-size: 19px;'>"))
+        parts.append(html_lib.escape(context[pos:]).replace("\n\n", "</span>\n\n<span style='font-size: 18px;'>"))
         with st.container(height=500):
-            st.markdown(f'<span style="font-size: 19px;">{"".join(parts)}</span>', unsafe_allow_html=True)
+            st.markdown(f'<span style="font-size: 18px;">{"".join(parts)}</span>', unsafe_allow_html=True)
             if p_idx < len(para_groups) - 1:
                 st.markdown("<br>", unsafe_allow_html=True)
 
