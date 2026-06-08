@@ -190,6 +190,14 @@ def build_highlight_html(runs: list[dict]) -> str:
         f"{inner}</mark>"
     )
 
+def _ann_file_index() -> dict[str, str]:
+    """Map filename (e.g. 'ananya.json') → Drive file_id in the annotations folder."""
+    if "ann_file_index" not in st.session_state:
+        folders = get_drive_folders()
+        files = gdrive.list_files(folders["annotations"])
+        st.session_state.ann_file_index = {f["name"]: f["id"] for f in files}
+    return st.session_state.ann_file_index
+
 
 def extract_highlights(filename: str) -> list[dict]:
     doc = Document(io.BytesIO(get_docx_bytes(filename)))
