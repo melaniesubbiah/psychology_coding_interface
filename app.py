@@ -586,10 +586,6 @@ def render_annotation() -> None:
     highlight = highlights[idx]
     saved = annotations.get(str(idx), {})
 
-
-    if highlight["title"]:
-        st.markdown(f"#### {idx + 1}. {html_lib.escape(highlight['title'])}", unsafe_allow_html=True)
-
     para_groups: list[tuple[str, list[dict]]] = []
     ctx_index: dict[str, int] = {}
     for item in highlight["items"]:
@@ -613,6 +609,8 @@ def render_annotation() -> None:
                 parts.append(build_highlight_html(item["runs"]))
         parts.append(html_lib.escape(context[pos:]).replace("\n\n", "</span>\n\n<span style='font-size: 18px;'>"))
         with st.container(height=500):
+            if highlight["title"]:
+                st.markdown(f"#### {idx + 1}. {html_lib.escape(highlight['title'])}", unsafe_allow_html=True)
             st.markdown(f'<span style="font-size: 18px;">{"".join(parts)}</span>', unsafe_allow_html=True)
             if p_idx < len(para_groups) - 1:
                 st.markdown("<br>", unsafe_allow_html=True)
