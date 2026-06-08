@@ -39,9 +39,9 @@ FILES: list[str] = [
 #
 CODING_SCHEMA: dict = {
     "Expressions": [
-        {"id": "expr_personal_belief", "label": "Personal belief", "type": "checkbox"},
-        {"id": "expr_personal_mindset", "label": "Personal mindset", "type": "checkbox"},
-        {"id": "expr_personal_value", "label": "Personal value", "type": "checkbox"},
+        {"id": "expr_personal_belief", "label": "Belief", "type": "checkbox"},
+        {"id": "expr_personal_mindset", "label": "Mindset", "type": "checkbox"},
+        {"id": "expr_personal_value", "label": "Value", "type": "checkbox"},
     ],
     "Domains": [
         {"id": "domain_self", "label": "Self", "type": "checkbox"},
@@ -49,7 +49,7 @@ CODING_SCHEMA: dict = {
         {"id": "domain_society", "label": "Society", "type": "checkbox"},
         {"id": "domain_transcendent", "label": "Transcendent", "type": "checkbox"},
     ],
-    "Emotional Tenor": [
+    "Emotion": [
         {"id": "emotional_tenor", "label": "Emotional tenor", "type": "select",
          "options": ["— select —", "-2: overtaken by negative", "-1", "0", "1", "2: exudes positive"]},
     ],
@@ -353,7 +353,7 @@ def generate_combined_excel() -> None:
     ws.title = "Annotations"
 
     schema_items = flat_schema()
-    header: list[str] = ["Participant", "Section", "Quote", "Notes"]
+    header: list[str] = ["Participant", "Section", "Quote"]
     col_meta: list[tuple] = []
     for item in schema_items:
         other_user = annotator_for_code(item["id"])
@@ -362,6 +362,7 @@ def generate_combined_excel() -> None:
         grey_col = len(header) + 1
         header.append(f"{item['label']} ({other_user})" if other_user else item["label"])
         col_meta.append((item, other_user, white_col, grey_col))
+    header.append("Notes")
 
     ws.append(header)
     for _, _, _, grey_col in col_meta:
@@ -385,7 +386,7 @@ def generate_combined_excel() -> None:
 
         for i in range(total):
             meta = highlights_meta.get(str(i), {})
-            title = meta.get("title", "")[9:].lower()
+            title = meta.get("title", "")[8:].lower()
             quote = meta.get("quote", "")
 
             u1_ann = user_anns.get(ADMIN_USER, {}).get(str(i), {})
@@ -397,7 +398,7 @@ def generate_combined_excel() -> None:
                 if user_anns.get(user, {}).get(str(i), {}).get("notes", "").strip()
             ]
 
-            row: list = [filename, title, quote, "\n".join(notes_parts)]
+            row: list = [filename, title, quote]
             for item, other_user, _, _ in col_meta:
                 sid = item["id"]
                 u1_val = _fmt(u1_ann.get("codes", {}).get(sid)) if u1_complete else ""
@@ -405,6 +406,7 @@ def generate_combined_excel() -> None:
                 ou_complete = is_annotated(ou_ann, schema_for_user(other_user)) if other_user else False
                 ou_val = _fmt(ou_ann.get("codes", {}).get(sid)) if ou_complete else ""
                 row += [u1_val, ou_val]
+            row.append("\n".join(notes_parts))
 
             ws.append(row)
             row_idx = ws.max_row
