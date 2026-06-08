@@ -139,8 +139,15 @@ def _get_user_data(annotator: str) -> dict:
     """Download and cache the single JSON for this user (all their files)."""
     cache_key = f"user_data_{annotator}"
     if cache_key not in st.session_state:
+        idx = _ann_file_index()
         jname = f"{annotator}.json"
-        st.session_state[cache_key] = json.loads(gdrive.download_bytes(idx[jname]))
+        if jname not in idx:
+            st.session_state[cache_key] = {"annotator": annotator, "files": {}}
+        else:
+            try:
+                st.session_state[cache_key] = json.loads(gdrive.download_bytes(idx[jname]))
+            except Exception:
+                st.session_state[cache_key] = {"annotator": annotator, "files": {}}
     return st.session_state[cache_key]
 
 
