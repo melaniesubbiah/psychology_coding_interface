@@ -620,21 +620,15 @@ def render_annotation() -> None:
 
 def main():
     st.set_page_config(page_title="Life Philosophy Coding Interface", layout="wide")
-    # st.html(
-    #     """
-    #     <style>
-    #     [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p {
-    #         font-size: 18px !important;
-    #     }
-    #     div[data-testid="stSelectbox"] label p {
-    #         font-size: 18px !important;
-    #     }
-    #     </style>
-    #     """
-    # )
     st.html(
         """
         <style>
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p {
+            font-size: 18px !important;
+        }
+        div[data-testid="stSelectbox"] label p {
+            font-size: 18px !important;
+        }
         [data-testid="stVerticalBlock"] {
             gap: 0.2rem; /* Adjust this value to compress or expand space */
         }
