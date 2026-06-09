@@ -45,13 +45,13 @@ CODING_SCHEMA: dict = {
         {"id": "emotional_tenor", "label": "Emotional tenor", "type": "select",
          "options": ["— select —", "-2: negative", "-1", "0", "1", "2: positive"]},
     ],
-    "**Themes:**": [
+    "**Core themes:**": [
         {"id": "self_determination", "label": "Self-determination", "type": "select",
          "options": ["— select —", "0: low", "1", "2", "3", "4: high"]},
         {"id": "connectedness", "label": "Connectedness", "type": "select",
          "options": ["— select —", "0: low", "1", "2", "3", "4: high"]},
     ],
-    "": [
+    "**Additional themes:**": [
         {"id": "theme_self_actualization", "label": "Self-actualization", "type": "checkbox"},
         {"id": "theme_world_awareness", "label": "World-awareness", "type": "checkbox"},
         {"id": "theme_trust", "label": "Trust", "type": "checkbox"},
@@ -564,6 +564,7 @@ def render_annotation() -> None:
             if p_idx < len(para_groups) - 1:
                 st.markdown("<br>", unsafe_allow_html=True)
 
+    st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
     saved_codes = saved.get("codes", {})
     new_codes: dict = {}
     cols = st.columns(5)
