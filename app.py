@@ -630,10 +630,9 @@ def main():
             font-size: 18px !important;
         }
         [data-testid="stVerticalBlock"] {
-            gap: 0.2rem; /* Adjust this value to compress or expand space */
+            gap: 0.2rem; 
         }
         div[data-testid="stButton"] button {
-            justify-content: flex-start !important;
             text-align: left !important;
         }
         </style>
