@@ -31,9 +31,9 @@ FILES: list[str] = [
 
 CODING_SCHEMA: dict = {
     "Expressions": [
-        {"id": "expr_personal_belief", "label": "Belief", "type": "checkbox"},
-        {"id": "expr_personal_mindset", "label": "Mindset", "type": "checkbox"},
-        {"id": "expr_personal_value", "label": "Value", "type": "checkbox"},
+        {"id": "expr_personal_belief", "label": "Personal belief", "type": "checkbox"},
+        {"id": "expr_personal_mindset", "label": "Personal mindset", "type": "checkbox"},
+        {"id": "expr_personal_value", "label": "Personal value", "type": "checkbox"},
     ],
     "Domains": [
         {"id": "domain_self", "label": "Self", "type": "checkbox"},
@@ -342,9 +342,10 @@ def generate_combined_excel() -> None:
     for item in schema_items:
         other_user = annotator_for_code(item["id"])
         white_col = len(header) + 1
-        header.append(item["label"])
+        temp_label = item["label"][len("Personal "):].title() if "Personal" in item["label"] else item["label"]
+        header.append(temp_label)
         grey_col = len(header) + 1
-        header.append(f"{item['label']} ({other_user})" if other_user else item["label"])
+        header.append(f"{temp_label} ({other_user})")
         col_meta.append((item, other_user, white_col, grey_col))
     header.append("Notes")
 
