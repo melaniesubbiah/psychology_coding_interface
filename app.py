@@ -630,10 +630,7 @@ def main():
             font-size: 18px !important;
         }
         [data-testid="stVerticalBlock"] {
-            gap: 0.2rem; 
-        }
-        div[data-testid="stButton"] button {
-            text-align: left !important;
+            gap: 0.1rem; 
         }
         </style>
         """
