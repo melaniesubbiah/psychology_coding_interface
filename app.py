@@ -30,28 +30,28 @@ FILES: list[str] = [
 ]
 
 CODING_SCHEMA: dict = {
-    "Expressions": [
+    "**Expressions:**": [
         {"id": "expr_personal_belief", "label": "Personal belief", "type": "checkbox"},
         {"id": "expr_personal_mindset", "label": "Personal mindset", "type": "checkbox"},
         {"id": "expr_personal_value", "label": "Personal value", "type": "checkbox"},
     ],
-    "Domains": [
+    "**Domains:**": [
         {"id": "domain_self", "label": "Self", "type": "checkbox"},
         {"id": "domain_community", "label": "Community", "type": "checkbox"},
         {"id": "domain_society", "label": "Society", "type": "checkbox"},
         {"id": "domain_transcendent", "label": "Transcendent", "type": "checkbox"},
     ],
-    "Emotion": [
+    "**Emotional tenor:**": [
         {"id": "emotional_tenor", "label": "Emotional tenor", "type": "select",
-         "options": ["— select —", "-2: overtaken by negative", "-1", "0", "1", "2: exudes positive"]},
+         "options": ["— select —", "-2: negative", "-1", "0", "1", "2: positive"]},
     ],
-    "Themes": [
+    "**Themes:**": [
         {"id": "self_determination", "label": "Self-determination", "type": "select",
-         "options": ["— select —", "0: lack of control", "1", "2", "3", "4: choice without barrier"]},
+         "options": ["— select —", "0: low", "1", "2", "3", "4: high"]},
         {"id": "connectedness", "label": "Connectedness", "type": "select",
-         "options": ["— select —", "0: isolation", "1", "2", "3", "4: strong clear connection"]},
+         "options": ["— select —", "0: low", "1", "2", "3", "4: high"]},
     ],
-    "Additional Themes": [
+    "** **": [
         {"id": "theme_self_actualization", "label": "Self-actualization", "type": "checkbox"},
         {"id": "theme_world_awareness", "label": "World-awareness", "type": "checkbox"},
         {"id": "theme_trust", "label": "Trust", "type": "checkbox"},
@@ -404,7 +404,7 @@ def generate_combined_excel() -> None:
                 ou_val = _fmt(ou_ann.get("codes", {}).get(sid)) if ou_complete else ""
 
                 ws.cell(row_idx, grey_col).fill = grey_fill
-                if u1_val and ou_val and u1_val != ou_val:
+                if u1_val != "" and ou_val != "" and u1_val != ou_val:
                     ws.cell(row_idx, white_col).fill = yellow_fill
                     ws.cell(row_idx, grey_col).fill = yellow_fill
 
@@ -568,9 +568,8 @@ def render_annotation() -> None:
     new_codes: dict = {}
     cols = st.columns(5)
     for col_id, (category, items) in enumerate(user_schema.items()):
-        #cols = st.columns(SCHEMA_COLUMNS[category])
         with cols[col_id]:
-            st.markdown(f"**{category}**:", unsafe_allow_html=True)
+            st.markdown(category, unsafe_allow_html=True)
             for schema_item in items:
                 #with cols[col_id+1]:
                 sid = schema_item["id"]
