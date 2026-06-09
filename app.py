@@ -8,15 +8,18 @@ from pathlib import Path
 
 import streamlit as st
 from docx import Document
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill
 
-import gdrive
+
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 USERS = ["ananya", "bodi", "meiling"]
 ADMIN_USER = "ananya"
 
 
-
-# Filenames (without .docx extension) all users will annotate.
 FILES: list[str] = [
     "001", "002", "003", "005", "006", "007",
     "009", "010", "011", "012", "013", "089",
@@ -26,17 +29,6 @@ FILES: list[str] = [
     "125", "129", "152", "156",
 ]
 
-# Coding schema — add your dimensions here.
-# Two types are supported:
-#
-#   Checkbox (binary yes/no):
-#     {"id": "unique_id", "label": "Display name", "type": "checkbox"}
-#
-#   Dropdown (pick one):
-#     {"id": "unique_id", "label": "Display name", "type": "select",
-#      "options": ["— select —", "Option A", "Option B", ...]}
-#     The first option is the placeholder and counts as unanswered for completion.
-#
 CODING_SCHEMA: dict = {
     "Expressions": [
         {"id": "expr_personal_belief", "label": "Belief", "type": "checkbox"},
@@ -68,8 +60,6 @@ CODING_SCHEMA: dict = {
     ],
 }
 
-# Per-user schema subsets — list the item IDs (from CODING_SCHEMA) each user should see.
-# ananya (admin) always sees the full schema.
 USER_SCHEMA_IDS: dict[str, list[str]] = {
     "bodi": [
         "expr_personal_belief", "expr_personal_mindset", "expr_personal_value",
@@ -83,8 +73,13 @@ USER_SCHEMA_IDS: dict[str, list[str]] = {
     ],
 }
 
-# Sections whose highlights are annotated one-by-one rather than grouped.
 INDIVIDUAL_SECTIONS = {"LIFE CHAPTERS"}
+
+creds = Credentials.from_service_account_info(
+        dict(st.secrets["google_service_account"]),
+        scopes=["https://www.googleapis.com/auth/drive"],
+    )
+svc = build("drive", "v3", credentials=creds)
 
 
 # ── Schema helpers ─────────────────────────────────────────────────────────────
@@ -115,41 +110,38 @@ def annotator_for_code(code_id: str) -> str | None:
 
 # ── Google Drive helpers ───────────────────────────────────────────────────────
 
-def get_drive_folders() -> dict[str, str]:
-    """Return and cache the docs + annotations Drive folder IDs."""
-    if "drive_folders" not in st.session_state:
-        docs_id = st.secrets["gdrive"]["docs_folder_id"]
-        ann_id = gdrive.ensure_subfolder("annotations", docs_id)
-        st.session_state.drive_folders = {"docs": docs_id, "annotations": ann_id}
-    return st.session_state.drive_folders
+def find_file_in_folder(folder_id, filename):
+    query = f"name='{filename}' and '{folder_id}' in parents and trashed=false"
+    results = svc.files().list(q=query, fields="files(id, name)").execute()
+    files = results.get("files", [])
+    return files[0]['id'] if files else None
 
 
-def _docx_index() -> dict[str, str]:
+def _docx_index(filename) -> dict[str, str]:
     """Map docx stem → Drive file_id, cached for the session."""
-    if "docx_index" not in st.session_state:
-        folders = get_drive_folders()
-        files = gdrive.list_files(
-            folders["docs"],
-            mime_filter="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
-        st.session_state.docx_index = {Path(f["name"]).stem: f["id"] for f in files}
-    return st.session_state.docx_index
+    if f"docx_{filename}" not in st.session_state:
+        file_id = find_file_in_folder(st.secrets["gdrive"]["docs_folder_id"], filename)
+        st.session_state[f"docx_{filename}"] = file_id
+    return st.session_state[f"docx_{filename}"]
+
+def download_bytes(file_id: str) -> bytes:
+    req = svc.files().get_media(fileId=file_id)
+    buf = io.BytesIO()
+    dl = MediaIoBaseDownload(buf, req)
+    done = False
+    while not done:
+        _, done = dl.next_chunk()
+    return buf.getvalue()
 
 def _get_user_data(annotator: str) -> dict:
     """Download and cache the single JSON for this user (all their files)."""
     cache_key = f"user_data_{annotator}"
     if cache_key not in st.session_state:
-        idx = _ann_file_index()
         jname = f"{annotator}.json"
-        if jname not in idx:
-            st.session_state[cache_key] = {"annotator": annotator, "files": {}}
-        else:
-            try:
-                st.session_state[cache_key] = json.loads(gdrive.download_bytes(idx[jname]))
-            except Exception:
-                st.session_state[cache_key] = {"annotator": annotator, "files": {}}
+        file_id = find_file_in_folder(st.secrets["gdrive"]["ann_folder_id"], jname)
+        st.session_state[f"{annotator}_file_id"] = file_id
+        st.session_state[cache_key] = json.loads(download_bytes(file_id))
     return st.session_state[cache_key]
-
 
 def _get_ann_data(annotator: str, filename: str) -> dict:
     """Return the per-file section from the user's JSON."""
@@ -163,13 +155,33 @@ def preload_annotations(users: list[str]) -> None:
 
 
 def get_docx_bytes(filename: str) -> bytes:
-    cache_key = f"docx_{filename}"
-    if cache_key not in st.session_state:
-        idx = _docx_index()
-        if filename not in idx:
-            raise FileNotFoundError(f"{filename}.docx not found in Drive")
-        st.session_state[cache_key] = gdrive.download_bytes(idx[filename])
-    return st.session_state[cache_key]
+    idx = _docx_index(f"{filename}.docx")
+    if idx not in st.session_state:
+        st.session_state[idx] = download_bytes(idx)
+    return st.session_state[idx]
+
+def _ann_file_index() -> dict[str, str]:
+    """Map filename (e.g. 'ananya.json') → Drive file_id in the annotations folder."""
+    if "ann_file_index" not in st.session_state:
+        files = gdrive.list_files(st.secrets["gdrive"]["ann_folder_id"])
+        st.session_state.ann_file_index = {f["name"]: f["id"] for f in files}
+    return st.session_state.ann_file_index
+
+
+def flush_to_drive(
+    annotator: str, filename: str, annotations: dict,
+    highlights: list[dict], current_idx: int | None = None,
+) -> None:
+    """Write the current user JSON to Drive, then update combined.xlsx if needed."""
+    save_annotations(annotator, filename, annotations, highlights)
+
+    user_data = _get_user_data(annotator)
+    json_bytes = json.dumps(user_data, indent=2).encode("utf-8")
+    media = MediaIoBaseUpload(io.BytesIO(json_bytes), mimetype="application/json", resumable=False)
+    svc.files().update(fileId=st.session_state[f"{annotator}_file_id"], media_body=media).execute()
+
+    if is_annotated(annotations.get(str(current_idx), {}), schema_for_user(annotator)):
+        generate_combined_excel()
 
 
 # ── Document parsing ───────────────────────────────────────────────────────────
@@ -196,14 +208,6 @@ def build_highlight_html(runs: list[dict]) -> str:
         f'<mark style="font-size: 18px;background:#fcfb90;padding:2px 5px;border-radius:3px">'
         f"{inner}</mark>"
     )
-
-def _ann_file_index() -> dict[str, str]:
-    """Map filename (e.g. 'ananya.json') → Drive file_id in the annotations folder."""
-    if "ann_file_index" not in st.session_state:
-        folders = get_drive_folders()
-        files = gdrive.list_files(folders["annotations"])
-        st.session_state.ann_file_index = {f["name"]: f["id"] for f in files}
-    return st.session_state.ann_file_index
 
 
 def extract_highlights(filename: str) -> list[dict]:
@@ -290,28 +294,6 @@ def save_annotations(
     st.session_state[f"user_data_{annotator}"] = user_data
 
 
-def flush_to_drive(
-    annotator: str, filename: str, annotations: dict,
-    highlights: list[dict], current_idx: int | None = None,
-) -> None:
-    """Write the current user JSON to Drive, then update combined.xlsx if needed."""
-    save_annotations(annotator, filename, annotations, highlights)
-
-    user_data = _get_user_data(annotator)
-    jname = f"{annotator}.json"
-    json_bytes = json.dumps(user_data, indent=2).encode("utf-8")
-
-    # Use cached file ID to skip the list query
-    folders = get_drive_folders()
-    gdrive.upload_or_update(jname, folders["annotations"], json_bytes, "application/json")
-
-    if current_idx is None or is_annotated(annotations.get(str(current_idx), {}), schema_for_user(annotator)):
-        try:
-            generate_combined_excel()
-        except Exception as e:
-            st.warning(f"combined.xlsx could not be updated: {e}")
-
-
 def is_complete(annotator: str, filename: str) -> bool:
     data = _get_ann_data(annotator, filename)
     total = data.get("total_highlights", -1)
@@ -347,12 +329,6 @@ def _fmt(val) -> str:
 
 
 def generate_combined_excel() -> None:
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import PatternFill
-    except ImportError:
-        return
-
     grey_fill   = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
@@ -433,9 +409,10 @@ def generate_combined_excel() -> None:
 
     buf = io.BytesIO()
     wb.save(buf)
-    xlsx_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    folders = get_drive_folders()
-    gdrive.upload_or_update("combined.xlsx", folders["annotations"], buf.getvalue(), xlsx_mime)
+    if "combined_file_id" not in st.session_state:
+        st.session_state["combined_file_id"] = find_file_in_folder(st.secrets["gdrive"]["ann_folder_id"], "combined.xlsx")
+    media = MediaIoBaseUpload(io.BytesIO(buf.getvalue()), mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resumable=False)
+    svc.files().update(fileId=st.session_state["combined_file_id"], media_body=media).execute()
 
 
 # ── Pages ──────────────────────────────────────────────────────────────────────
@@ -463,37 +440,23 @@ def render_file_page() -> None:
         st.subheader(f"Welcome, {annotator}")
 
         with st.spinner("Loading progress…"):
-            try:
-                get_drive_folders()
-                users_to_load = USERS if annotator == ADMIN_USER else [annotator]
-                preload_annotations(users_to_load)
-            except Exception as e:
-                st.error(f"Could not connect to Google Drive: {e}")
-                return
+            users_to_load = USERS if annotator == ADMIN_USER else [annotator]
+            preload_annotations(users_to_load)
 
-        docx_idx = _docx_index()
-        all_stems = [s for s in docx_idx if f"{s}.docx" in
-                     [f"{k}.docx" for k in docx_idx]]
-        all_stems = list(docx_idx.keys())
-        stems = [s for s in FILES if s in all_stems]
-        if not stems:
-            st.warning("No matching .docx files found in the Drive folder.")
-            return
-
-        n_total = len(stems)
+        n_total = len(FILES)
 
         if annotator == ADMIN_USER:
             for u in USERS:
-                u_done = sum(1 for s in stems if is_complete(u, s))
+                u_done = sum(1 for s in FILES if is_complete(u, s))
                 st.progress(u_done / n_total if n_total else 0)
                 st.caption(f"{u}: {u_done} of {n_total} files complete")
         else:
-            n_done = sum(1 for s in stems if is_complete(annotator, s))
+            n_done = sum(1 for s in FILES if is_complete(annotator, s))
             st.progress(n_done / n_total if n_total else 0)
             st.caption(f"{n_done} of {n_total} files complete")
 
-        personal_complete = [s for s in stems if is_complete(annotator, s)]
-        personal_incomplete = [s for s in stems if not is_complete(annotator, s)]
+        personal_complete = [s for s in FILES if is_complete(annotator, s)]
+        personal_incomplete = [s for s in FILES if not is_complete(annotator, s)]
         display_options = personal_incomplete + [f"✓ {s}" for s in personal_complete]
         stem_options = personal_incomplete + personal_complete
 
@@ -534,13 +497,6 @@ def render_annotation() -> None:
             st.session_state.page = "files"
             st.rerun()
         return
-
-    total_words = sum(len(h["text"].split()) for h in highlights)
-    labeled_words = sum(
-        len(highlights[i]["text"].split())
-        for i in range(len(highlights))
-        if is_annotated(annotations.get(str(i), {}), user_schema)
-    )
 
     idx = st.session_state.get("current_idx", 0)
 
