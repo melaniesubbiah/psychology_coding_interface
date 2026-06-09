@@ -51,7 +51,7 @@ CODING_SCHEMA: dict = {
         {"id": "connectedness", "label": "Connectedness", "type": "select",
          "options": ["— select —", "0: low", "1", "2", "3", "4: high"]},
     ],
-    "** **": [
+    "": [
         {"id": "theme_self_actualization", "label": "Self-actualization", "type": "checkbox"},
         {"id": "theme_world_awareness", "label": "World-awareness", "type": "checkbox"},
         {"id": "theme_trust", "label": "Trust", "type": "checkbox"},
