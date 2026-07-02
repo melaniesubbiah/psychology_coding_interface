@@ -21,8 +21,7 @@ ADMIN_USER = "ananya"
 
 
 FILES: list[str] = [
-    #"001", "002",
-    "003", "005", "006", "007",
+    "001", "002", "003", "005", "006", "007",
     "009", "010", "011", "012", "013", "089",
     "090", "091", "092", "093", "094", "095",
     "096", "097", "098", "100", "101", "102",
@@ -227,7 +226,7 @@ def extract_highlights(filename: str) -> list[dict]:
         current_runs: list[dict] = []
         groups: list[list[dict]] = []
         for run in para.runs:
-            if run.text == ' ':
+            if (filename not in ['001', '002']) and (run.text == ' '):
                 current_runs.append({"text": run.text, "bold": False})
             elif run.font.highlight_color is not None:
                 current_runs.append({"text": run.text, "bold": bool(run.bold)})
