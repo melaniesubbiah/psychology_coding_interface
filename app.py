@@ -227,7 +227,7 @@ def extract_highlights(filename: str) -> list[dict]:
         groups: list[list[dict]] = []
         for run in para.runs:
             if run.text == ' ':
-                current_runs.append({"tepxt": run.text, "bold": False})
+                current_runs.append({"text": run.text, "bold": False})
             elif run.font.highlight_color is not None:
                 current_runs.append({"text": run.text, "bold": bool(run.bold)})
             else:
