@@ -26,7 +26,7 @@ FILES: list[str] = [
     "090", "091", "092", "093", "094", "095",
     "096", "097", "098", "100", "101", "102",
     "104", "105", "120", "121", "122", "123",
-    "125", "129", "152", "156",
+    "125", "129", "130", "131", "152", "156",
 ]
 
 CODING_SCHEMA: dict = {
@@ -226,7 +226,9 @@ def extract_highlights(filename: str) -> list[dict]:
         current_runs: list[dict] = []
         groups: list[list[dict]] = []
         for run in para.runs:
-            if run.font.highlight_color is not None:
+            if run.text == ' ':
+                current_runs.append({"tepxt": run.text, "bold": False})
+            elif run.font.highlight_color is not None:
                 current_runs.append({"text": run.text, "bold": bool(run.bold)})
             else:
                 if current_runs:
