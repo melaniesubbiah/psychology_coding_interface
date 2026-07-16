@@ -321,8 +321,7 @@ def is_partial_annotated(ann: dict, schema: dict | None = None) -> bool:
     non_select_ids = [item["id"] for item in flat_schema(schema) if item["type"] != "select"]
     if select_ids:
         any_selected = any(codes.get(sid, "") not in ("", "— select —") for sid in select_ids)
-        if not any_selected:
-            return any(codes.get(sid, 0) > 0 for sid in non_select_ids)
+        return any_selected or any(codes.get(sid, 0) > 0 for sid in non_select_ids)
     return bool(codes)
 
 
