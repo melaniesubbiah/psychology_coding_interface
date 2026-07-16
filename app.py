@@ -180,8 +180,7 @@ def flush_to_drive(
     media = MediaIoBaseUpload(io.BytesIO(json_bytes), mimetype="application/json", resumable=False)
     svc.files().update(fileId=st.session_state[f"{annotator}_file_id"], media_body=media).execute()
 
-    if is_annotated(annotations.get(str(current_idx), {}), schema_for_user(annotator)):
-        generate_combined_excel()
+    generate_combined_excel()
 
 
 # ── Document parsing ───────────────────────────────────────────────────────────
