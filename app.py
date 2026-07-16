@@ -387,10 +387,10 @@ def generate_combined_excel() -> None:
             row: list = [filename, title, quote]
             for item, other_user, _, _ in col_meta:
                 sid = item["id"]
-                u1_val = _fmt(u1_ann.get("codes", {}).get(sid)) if u1_complete else ""
+                u1_val = _fmt(u1_ann.get("codes", {}).get(sid)) #if u1_complete else ""
                 ou_ann = user_anns.get(other_user, {}).get(str(i), {}) if other_user else {}
                 ou_complete = is_annotated(ou_ann, schema_for_user(other_user)) if other_user else False
-                ou_val = _fmt(ou_ann.get("codes", {}).get(sid)) if ou_complete else ""
+                ou_val = _fmt(ou_ann.get("codes", {}).get(sid)) #if ou_complete else ""
                 row += [u1_val, ou_val]
             row.append("\n".join(notes_parts))
 
@@ -399,10 +399,10 @@ def generate_combined_excel() -> None:
 
             for item, other_user, white_col, grey_col in col_meta:
                 sid = item["id"]
-                u1_val = _fmt(u1_ann.get("codes", {}).get(sid)) if u1_complete else ""
+                u1_val = _fmt(u1_ann.get("codes", {}).get(sid)) #if u1_complete else ""
                 ou_ann = user_anns.get(other_user, {}).get(str(i), {}) if other_user else {}
                 ou_complete = is_annotated(ou_ann, schema_for_user(other_user)) if other_user else False
-                ou_val = _fmt(ou_ann.get("codes", {}).get(sid)) if ou_complete else ""
+                ou_val = _fmt(ou_ann.get("codes", {}).get(sid)) #if ou_complete else ""
 
                 ws.cell(row_idx, grey_col).fill = grey_fill
                 if u1_val != "" and ou_val != "" and u1_val != ou_val:
